@@ -28,13 +28,24 @@ type Toast = { kind: "success" | "error" | "info"; text: string } | null;
 export default function Home() {
   const [ready, setReady] = useState(false), [uid, setUid] = useState<string | null>(null), [loading, setLoading] = useState(true);
   const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [mode, setMode] = useState<"login" | "signup">("login"), [authError, setAuthError] = useState("");
+  const [authPending, setAuthPending] = useState(false), [authNotice, setAuthNotice] = useState("");
   const [settings, setSettings] = useState<Settings | null>(null), [txs, setTxs] = useState<Transaction[]>([]), [tab, setTab] = useState<Tab>("dashboard");
   const [txDate, setTxDate] = useState(toDateOnly(localDate())), [desc, setDesc] = useState(""), [category, setCategory] = useState<Category>("Ăn uống"), [type, setType] = useState<TxType>("Chi"), [amount, setAmount] = useState(""), [note, setNote] = useState("");
   const [txError, setTxError] = useState(""), [toast, setToast] = useState<Toast>(null), [confirmDelete, setConfirmDelete] = useState<Transaction | null>(null);
   const [openCycle, setOpenCycle] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setUid(data.session?.user.id ?? null); setReady(true); });
+    const callbackParams = new URLSearchParams(window.location.hash.slice(1));
+    const callbackError = callbackParams.get("error_description") || new URLSearchParams(window.location.search).get("error_description");
+    if (callbackError) {
+      queueMicrotask(() => setAuthError("Link xác nhận đã hết hạn hoặc không hợp lệ. Vui lòng đăng ký lại để nhận email xác nhận mới."));
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    supabase.auth.getSession().then(({ data, error }) => {
+      setUid(data.session?.user.id ?? null);
+      if (error) setAuthError(error.message);
+      setReady(true);
+    }).catch(() => { setAuthError("Không thể kết nối. Vui lòng thử lại."); setReady(true); });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setUid(session?.user.id ?? null));
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -90,11 +101,37 @@ export default function Home() {
 
   async function auth(e: FormEvent) {
     e.preventDefault();
+    if (authPending) return;
     setAuthError("");
-    if (!email.trim()) { setAuthError("Vui lòng nhập email."); return; }
+    setAuthNotice("");
+    const address = email.trim();
+    if (!address) { setAuthError("Vui lòng nhập email."); return; }
     if (password.length < 6) { setAuthError("Mật khẩu cần ít nhất 6 ký tự."); return; }
-    const result = mode === "login" ? await supabase.auth.signInWithPassword({ email, password }) : await supabase.auth.signUp({ email, password });
-    if (result.error) setAuthError(result.error.message);
+    setAuthPending(true);
+    try {
+      const result = mode === "login"
+        ? await supabase.auth.signInWithPassword({ email: address, password })
+        : await supabase.auth.signUp({ email: address, password, options: { emailRedirectTo: `${window.location.origin}/` } });
+      if (result.error) {
+        const messages: Record<string, string> = {
+          invalid_credentials: "Email hoặc mật khẩu không đúng.",
+          email_not_confirmed: "Bạn cần xác nhận email trước khi đăng nhập. Hãy kiểm tra hộp thư và mục Spam.",
+          user_already_exists: "Email này đã được đăng ký. Vui lòng đăng nhập.",
+          over_email_send_rate_limit: "Bạn đã yêu cầu quá nhiều email. Vui lòng chờ một lát rồi thử lại.",
+          over_request_rate_limit: "Có quá nhiều yêu cầu. Vui lòng chờ một lát rồi thử lại.",
+          signup_disabled: "Đăng ký hiện đang tạm tắt.",
+        };
+        setAuthError(messages[result.error.code ?? ""] ?? result.error.message);
+      } else if (mode === "signup" && !result.data.session) {
+        setAuthNotice(`Đã tiếp nhận đăng ký cho ${address}. Hãy kiểm tra hộp thư (cả mục Spam) và nhấn link xác nhận để hoàn tất. Nếu email đã có tài khoản, hãy đăng nhập.`);
+        setMode("login");
+        setPassword("");
+      }
+    } catch {
+      setAuthError("Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.");
+    } finally {
+      setAuthPending(false);
+    }
   }
 
   async function signOut() {
@@ -136,7 +173,7 @@ export default function Home() {
   }
 
   if (!ready) return <Loading text="Đang tải ứng dụng..." />;
-  if (!uid) return <main className="auth-shell"><ToastView toast={authError ? { kind: "error", text: authError } : null} /><section className="auth-card"><Logo large /><span className="auth-kicker">Personal finance</span><h1>Money Flow</h1><form onSubmit={auth} className="stack"><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com" required /></label><label>Mật khẩu<input type="password" minLength={6} value={password} onChange={e => setPassword(e.target.value)} placeholder="Tối thiểu 6 ký tự" required /></label><button className="primary" type="submit">{mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</button></form><button className="link-btn" onClick={() => { setAuthError(""); setMode(mode === "login" ? "signup" : "login"); }}>{mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}</button></section></main>;
+  if (!uid) return <main className="auth-shell"><section className="auth-card"><Logo large /><span className="auth-kicker">Personal finance</span><h1>Money Flow</h1>{authNotice && <div className="auth-notice" role="status">{authNotice}</div>}{authError && <div className="form-error auth-message" role="alert">{authError}</div>}<form onSubmit={auth} className="stack" aria-busy={authPending}><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com" required /></label><label>Mật khẩu<input type="password" minLength={6} value={password} onChange={e => setPassword(e.target.value)} placeholder="Tối thiểu 6 ký tự" required /></label><button className="primary" type="submit" disabled={authPending}>{authPending ? (mode === "login" ? "Đang đăng nhập…" : "Đang tạo tài khoản…") : (mode === "login" ? "Đăng nhập" : "Tạo tài khoản")}</button></form><button className="link-btn" disabled={authPending} onClick={() => { setAuthError(""); setAuthNotice(""); setMode(mode === "login" ? "signup" : "login"); }}>{mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}</button></section></main>;
   if (loading || !settings) return <Loading text="Đang tải dữ liệu..." />;
 
   return <main className="app-shell">

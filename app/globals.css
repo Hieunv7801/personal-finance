@@ -240,3 +240,7 @@ input:focus,select:focus{border-color:#10b981;box-shadow:0 0 0 4px rgba(16,185,1
 .category-options button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;border:0;border-radius:10px;padding:10px 12px;background:#fff;color:#334155;text-align:left;font-size:16px;font-weight:650}
 .category-options button[aria-selected="true"]{background:#ecfdf5;color:#047857}
 .category-options button:hover,.category-options button:focus-visible{background:#f1f5f9;outline:2px solid #10b981;outline-offset:-2px}
+
+.auth-notice{margin-bottom:18px;padding:14px;border:1px solid #a7f3d0;border-radius:16px;background:#ecfdf5;color:#047857;font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+.auth-message{margin-bottom:18px;font-size:14px;line-height:1.5}
+button:disabled{cursor:wait;opacity:.65}
