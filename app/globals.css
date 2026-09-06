@@ -6,8 +6,7 @@ button{cursor:pointer}
 .center-screen{gap:16px;align-content:center;color:#64748b;font-weight:800}
 .auth-card{width:min(440px,100%);padding:30px;border:1px solid rgba(148,163,184,.25);border-radius:28px;background:rgba(255,255,255,.9);box-shadow:0 30px 90px rgba(15,23,42,.12)}
 .auth-kicker,.eyebrow{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#64748b}
-.auth-card h1{margin:12px 0 10px;font-size:42px;letter-spacing:0;line-height:1}
-.auth-card p{margin:0 0 24px;color:#667085;line-height:1.55;font-size:17px}
+.auth-card h1{margin:12px 0 28px;font-size:42px;letter-spacing:0;line-height:1}
 .logo{position:relative;width:42px;height:42px;border-radius:15px;display:grid;place-items:center;background:#0f172a;color:white;box-shadow:0 12px 28px rgba(15,23,42,.2);overflow:hidden;flex:0 0 auto}
 .logo.large{width:72px;height:72px;border-radius:24px;margin-bottom:18px}
 .logo span{position:relative;z-index:1;font-weight:950;font-size:20px}
@@ -173,10 +172,14 @@ input:focus,select:focus{border-color:#10b981;box-shadow:0 0 0 4px rgba(16,185,1
 .modal{width:min(420px,100%);background:white;border-radius:26px;padding:22px;box-shadow:0 30px 90px rgba(15,23,42,.24)}
 .modal h2{margin:0 0 8px}.modal p{margin:0 0 18px;color:#64748b;font-weight:800}.modal div{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ghost{background:#f1f5f9;color:#334155}.danger{background:#dc2626;color:white}
-.bottom-nav,.mobile-shell-nav{display:none}
+.bottom-nav,.mobile-shell-nav,.mobile-account-bar{display:none}
 @media(max-width:1180px){
   .app-shell{display:block}
   .sidebar{display:none}
+  .mobile-account-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 18px;padding-top:max(8px,env(safe-area-inset-top));background:#0f172a;color:#fff}
+  .mobile-account-bar strong{font-size:16px}
+  .mobile-account-bar button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 12px;border:1px solid #475569;border-radius:12px;background:#1e293b;color:#fff;font-size:14px;font-weight:750}
+  .mobile-account-bar button:focus-visible{outline:2px solid #6ee7b7;outline-offset:3px}
   .content{max-width:760px;padding:14px 14px 136px}
   .bottom-nav.mobile-shell-nav{position:fixed;left:50%;right:auto;bottom:max(14px,env(safe-area-inset-bottom));z-index:100;display:grid!important;grid-template-columns:repeat(4,1fr);gap:5px;width:min(720px,calc(100vw - 24px));transform:translateX(-50%);padding:8px;border:1px solid rgba(148,163,184,.32);border-radius:26px;background:rgba(255,255,255,.96);backdrop-filter:blur(18px);box-shadow:0 20px 60px rgba(15,23,42,.26)}
   .bottom-nav button{display:grid;place-items:center;gap:3px;text-align:center;padding:10px 4px;border-radius:18px;font-size:11px;color:#64748b}
