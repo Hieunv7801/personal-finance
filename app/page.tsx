@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Banknote, CircleDollarSign, Clock3, Coffee, Fuel, Gift, HomeIcon, House, Landmark, LayoutDashboard, LogOut, MoreHorizontal, Plus, SettingsIcon, ShoppingBag, Utensils, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, ArrowRight, ArrowUpFromLine, Banknote, CircleDollarSign, Clock3, Coffee, Fuel, Gift, HomeIcon, House, Landmark, LayoutDashboard, LogOut, MoreHorizontal, Plus, SettingsIcon, ShoppingBag, Utensils, Wallet } from "lucide-react";
 import CategorySelect from "./category-select";
 import { supabase } from "@/lib/supabase";
 import { buildCycles, currentDebt, cycleEnd, cycleStartFor, DAILY_CATEGORIES, localDate, money, parseDateOnly, salaryDayFromPlanStart, shortMoney, toDateOnly } from "@/lib/money";
@@ -13,7 +13,6 @@ const easeOut = [0.22, 1, 0.36, 1] as const;
 const categories: Category[] = ["Ăn uống", "Cafe/Giải trí", "Đi lại/Xăng", "Mua sắm", "Khác", "Trọ", "Phát sinh", "Trả nợ", "Lương", "Thưởng", "Thu nhập khác"];
 const expenseCategories = new Set<Category>(["Ăn uống", "Cafe/Giải trí", "Đi lại/Xăng", "Mua sắm", "Khác", "Trọ", "Phát sinh", "Trả nợ"]);
 const categoryIcon: Record<Category, IconName> = { "Ăn uống": "food", "Cafe/Giải trí": "coffee", "Đi lại/Xăng": "fuel", "Mua sắm": "shopping", "Khác": "more", "Trọ": "home", "Phát sinh": "alert", "Trả nợ": "debt", "Lương": "income", "Thưởng": "star", "Thu nhập khác": "plus" };
-const defaults: Omit<Settings, "user_id"> = { planned_salary: 21600000, daily_budget: 120000, rent_budget: 2500000, incidental_budget: 900000, starting_debt: 15000000, planned_debt_payment: 4000000, savings_goal: 100000000, salary_day: 15, plan_start_date: "2026-09-15", initial_savings: 0, t13_amount: 24000000, t13_date: null };
 const nav = [["dashboard", "Tổng quan"], ["transactions", "Giao dịch"], ["cycles", "Kỳ lương"], ["settings", "Cấu hình"]] as const;
 const dmy = (d: Date) => new Intl.DateTimeFormat("vi-VN").format(d);
 const cycleEndDayLabel = (salaryDay: number) => (salaryDay === 1 ? "cuối tháng" : String(salaryDay - 1));
@@ -23,6 +22,33 @@ const formatInputMoney = (v: string) => {
   const n = parseAmount(v);
   return n ? new Intl.NumberFormat("vi-VN").format(n) : "";
 };
+const onboardingKey = (id: string) => `mf_onboarding_done_${id}`;
+const defaultSettings = (): Omit<Settings, "user_id"> => {
+  const now = localDate();
+  const plan_start_date = toDateOnly(new Date(now.getFullYear(), now.getMonth(), 15));
+  return {
+    planned_salary: 0,
+    daily_budget: 0,
+    rent_budget: 0,
+    incidental_budget: 0,
+    starting_debt: 0,
+    planned_debt_payment: 0,
+    savings_goal: 0,
+    salary_day: 15,
+    plan_start_date,
+    initial_savings: 0,
+    t13_amount: 0,
+    t13_date: null,
+  };
+};
+const isBlankSettings = (s: Settings) =>
+  s.daily_budget === 0 &&
+  s.rent_budget === 0 &&
+  s.incidental_budget === 0 &&
+  s.starting_debt === 0 &&
+  s.initial_savings === 0 &&
+  s.t13_amount === 0 &&
+  s.planned_salary === 0;
 
 type Tab = typeof nav[number][0];
 type NavIconName = Tab;
@@ -38,6 +64,7 @@ export default function Home() {
   const [txDate, setTxDate] = useState(toDateOnly(localDate())), [desc, setDesc] = useState(""), [category, setCategory] = useState<Category>("Ăn uống"), [type, setType] = useState<TxType>("Chi"), [amount, setAmount] = useState(""), [note, setNote] = useState("");
   const [txError, setTxError] = useState(""), [toast, setToast] = useState<Toast>(null), [confirmDelete, setConfirmDelete] = useState<Transaction | null>(null);
   const [openCycle, setOpenCycle] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const reduceMotion = useReducedMotion();
 
   const goTab = (next: Tab) => {
@@ -62,21 +89,33 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!uid) { queueMicrotask(() => setLoading(false)); return; }
+    if (!uid) { queueMicrotask(() => { setLoading(false); setShowOnboarding(false); }); return; }
     (async () => {
       setLoading(true);
       const [{ data: s }, { data: t }] = await Promise.all([
         supabase.from("settings").select("*").eq("user_id", uid).maybeSingle(),
         supabase.from("transactions").select("*").eq("user_id", uid).order("occurred_on", { ascending: false }).order("created_at", { ascending: false })
       ]);
+      let nextSettings: Settings | null = null;
+      let justCreated = false;
       if (!s) {
-        const { data: created } = await supabase.from("settings").insert({ user_id: uid, ...defaults }).select("*").single();
-        setSettings(created as Settings);
-      } else setSettings(s as Settings);
+        const { data: created } = await supabase.from("settings").insert({ user_id: uid, ...defaultSettings() }).select("*").single();
+        nextSettings = created as Settings;
+        justCreated = true;
+      } else nextSettings = s as Settings;
+      setSettings(nextSettings);
       setTxs((t ?? []) as Transaction[]);
+      const done = typeof window !== "undefined" && localStorage.getItem(onboardingKey(uid)) === "1";
+      setShowOnboarding(!done && !!nextSettings && (justCreated || isBlankSettings(nextSettings)));
       setLoading(false);
     })();
   }, [uid]);
+
+  const dismissOnboarding = (goSettings = false) => {
+    if (uid) localStorage.setItem(onboardingKey(uid), "1");
+    setShowOnboarding(false);
+    if (goSettings) goTab("settings");
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -220,6 +259,41 @@ export default function Home() {
     </section>
     <LayoutGroup id="bottom-nav"><nav className="bottom-nav mobile-shell-nav">{nav.map(([k, l]) => <button key={k} className={tab === k ? "nav-active" : ""} onClick={() => goTab(k)}>{tab === k && <motion.span layoutId="bottom-nav-pill" className="nav-pill" transition={{ type: "spring", stiffness: 420, damping: 34 }} />}<NavIcon name={k} />{l}</button>)}</nav></LayoutGroup>
     <AnimatePresence>{confirmDelete && <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={() => setConfirmDelete(null)}><motion.section className="modal" role="dialog" aria-modal="true" initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2, ease: easeOut }} onClick={e => e.stopPropagation()}><h2>Xóa giao dịch?</h2><p>{confirmDelete.description} · {money(confirmDelete.amount)}</p><div><button className="ghost" onClick={() => setConfirmDelete(null)}>Hủy</button><button className="danger" onClick={delTx}>Xóa</button></div></motion.section></motion.div>}</AnimatePresence>
+    <AnimatePresence>
+      {showOnboarding && (
+        <motion.div className="modal-backdrop onboarding-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          <motion.section
+            className="modal onboarding-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="onboarding-title"
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+          >
+            <div className="onboarding-top" aria-hidden="true">
+              <span className="onboarding-glow" />
+              <span className="onboarding-icon"><SettingsIcon size={24} strokeWidth={2.1} /></span>
+            </div>
+            <span className="onboarding-kicker">Chào mừng</span>
+            <h2 id="onboarding-title">Thiết lập lần đầu</h2>
+            <p>Ngân sách đang để <em>0</em>. Vào Cấu hình để điền số liệu của bạn, rồi bắt đầu ghi giao dịch.</p>
+            <ol className="onboarding-steps">
+              <li><span>1</span><div><strong>Cấu hình</strong><small>Hạn mức ngày, trọ, nợ, thưởng</small></div></li>
+              <li><span>2</span><div><strong>Giao dịch</strong><small>Ghi thu / chi thực tế mỗi ngày</small></div></li>
+            </ol>
+            <div className="modal-actions onboarding-actions">
+              <button type="button" className="primary onboarding-cta" onClick={() => dismissOnboarding(true)}>
+                <span>Đi tới Cấu hình</span>
+                <ArrowRight size={18} strokeWidth={2.4} aria-hidden="true" />
+              </button>
+              <button type="button" className="onboarding-skip" onClick={() => dismissOnboarding(false)}>Để sau</button>
+            </div>
+          </motion.section>
+        </motion.div>
+      )}
+    </AnimatePresence>
   </main>;
 }
 
