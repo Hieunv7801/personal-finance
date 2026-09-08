@@ -241,9 +241,43 @@ label:has(>input[type="date"]){overflow:hidden;min-width:0}
 .setting-group p{margin:6px 0 0;color:#64748b;font-size:13px;font-weight:750;line-height:1.45}
 .setting-hint{margin:0!important;padding:10px 12px;border-radius:12px;background:#f8fafc;border:1px solid #e8eef6;color:#475569!important;font-size:12px!important;font-weight:800!important}
 .debt-setting{background:linear-gradient(135deg,#fff,#fffbeb)}
+.debt-list{display:grid;gap:8px}
+.debt-empty{margin:0;padding:14px;border-radius:14px;border:1px dashed #d5dbe7;background:#fff;color:#94a3b8;font-size:13px;font-weight:800;text-align:center}
+.debt-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:16px;background:#fff;border:1px solid rgba(148,163,184,.22)}
+.debt-row strong{display:block;font-size:14px;font-weight:900;color:#0f172a}
+.debt-row small{display:block;margin-top:3px;color:#64748b;font-size:12px;font-weight:750}
+.debt-row-meta{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.debt-row-meta>span{font-size:14px;font-weight:950;font-variant-numeric:tabular-nums;color:#0f172a}
+.debt-paid-tag{color:#059669!important;font-size:12px!important;font-weight:850!important}
+.debt-del{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:12px;background:#fff1f2;color:#e11d48}
+.debt-del:hover{background:#ffe4e6}
+.debt-add{display:grid;gap:10px;margin-top:4px;padding-top:4px}
+.debt-add .primary{min-height:48px}
 .debt-preview{display:flex;justify-content:space-between;align-items:center;gap:16px;border-radius:18px;background:linear-gradient(135deg,#0f172a,#1e293b);color:white;padding:16px 18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 .debt-preview span{flex:1;min-width:0;color:#94a3b8;font-size:12px;font-weight:850;letter-spacing:.02em;line-height:1.35}
 .debt-preview strong{flex:0 0 auto;margin:0;font-size:20px;font-weight:950;letter-spacing:-.02em;line-height:1;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.debt-pay-box{display:grid;gap:10px;padding:14px;border-radius:18px;background:linear-gradient(135deg,#fffbeb,#fff);border:1px solid rgba(251,191,36,.28)}
+.debt-pay-hint{margin:0!important}
+.debt-pay-hint strong{color:#0f172a}
+.debt-select{position:relative;display:grid;gap:8px;min-width:0}
+.debt-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:56px;border:1px solid #d5dbe7;border-radius:16px;padding:10px 14px;background:#fff;color:#0f172a;text-align:left;transition:border-color .2s ease,box-shadow .2s ease}
+.debt-select-trigger.is-open,.debt-select-trigger:focus-visible{outline:none;border-color:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.14)}
+.debt-select-trigger:disabled{opacity:.72;cursor:not-allowed}
+.debt-select-trigger.is-placeholder .debt-select-text strong{color:#94a3b8;font-weight:800}
+.debt-select-main{display:flex;align-items:center;gap:12px;min-width:0}
+.debt-select-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#0f172a,#134e4a);color:#fff;flex:0 0 auto}
+.debt-select-text{display:grid;gap:2px;min-width:0}
+.debt-select-text strong{font-size:15px;font-weight:900;line-height:1.2}
+.debt-select-text small{color:#64748b;font-size:12px;font-weight:750}
+.debt-select-options{position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:120;max-height:min(280px,42dvh);overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid #e2e8f0;border-radius:18px;background:#fff;box-shadow:0 18px 48px rgba(15,23,42,.18);transform-origin:top center}
+.debt-select-options button{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;width:100%;min-height:52px;border:0;border-radius:14px;padding:10px 12px;background:#fff;color:#334155;text-align:left;transition:background .15s ease}
+.debt-select-options button:hover,.debt-select-options button:focus-visible{background:#fff7ed;outline:2px solid #f59e0b;outline-offset:-2px}
+.debt-select-options button.is-selected{background:#fffbeb;color:#0f172a}
+.debt-select-option-copy{display:grid;gap:2px;min-width:0}
+.debt-select-option-copy strong{font-size:14px;font-weight:900}
+.debt-select-option-copy small{color:#64748b;font-size:12px;font-weight:700}
+.debt-select-option-amt{font-size:13px;font-weight:950;font-variant-numeric:tabular-nums;color:#0f172a}
+.debt-select-options svg{color:#047857}
 .empty{padding:28px;text-align:center;color:#94a3b8;font-weight:850;background:white;border-radius:20px;border:1px dashed #cbd5e1}
 .good-text{color:#059669!important}
 .bad-text{color:#dc2626!important}

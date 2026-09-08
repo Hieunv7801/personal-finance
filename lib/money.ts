@@ -38,4 +38,22 @@ export function buildCycles(txs: Transaction[], s: Settings, through: Date, coun
     return { start, end, income, dailySpend, rent, incidental, livingSpend, livingBudget, budgetRemaining, debtPaid, totalOut, savings, cumulative, hasData };
   });
 }
-export function currentDebt(txs: Transaction[], s: Settings, through: Date) { const paid = txs.filter(t => t.type === "Chi" && t.category === "Trả nợ" && parseDateOnly(t.occurred_on) <= through).reduce((a, t) => a + t.amount, 0); return Math.max(0, s.starting_debt - paid); }
+export function paidTowardDebt(txs: Transaction[], debtId: string, through?: Date) {
+  return txs
+    .filter(t => t.type === "Chi" && t.category === "Trả nợ" && t.debt_id === debtId && (!through || parseDateOnly(t.occurred_on) <= through))
+    .reduce((a, t) => a + t.amount, 0);
+}
+export function debtRemaining(debt: { id: string; principal: number }, txs: Transaction[], through?: Date) {
+  return Math.max(0, debt.principal - paidTowardDebt(txs, debt.id, through));
+}
+export function totalDebtRemaining(debts: { id: string; principal: number }[], txs: Transaction[], s: Settings, through: Date) {
+  if (debts.length === 0) {
+    const paid = txs.filter(t => t.type === "Chi" && t.category === "Trả nợ" && parseDateOnly(t.occurred_on) <= through).reduce((a, t) => a + t.amount, 0);
+    return Math.max(0, s.starting_debt - paid);
+  }
+  return debts.reduce((a, d) => a + debtRemaining(d, txs, through), 0);
+}
+/** @deprecated Prefer totalDebtRemaining with debts list */
+export function currentDebt(txs: Transaction[], s: Settings, through: Date) {
+  return totalDebtRemaining([], txs, s, through);
+}
