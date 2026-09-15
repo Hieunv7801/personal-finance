@@ -65,6 +65,7 @@ export default function Home() {
   const [txDate, setTxDate] = useState(toDateOnly(localDate())), [desc, setDesc] = useState(""), [category, setCategory] = useState<Category>("Ăn uống"), [type, setType] = useState<TxType>("Chi"), [amount, setAmount] = useState(""), [note, setNote] = useState("");
   const [debtId, setDebtId] = useState(""), [debtName, setDebtName] = useState(""), [debtAmount, setDebtAmount] = useState("");
   const [txError, setTxError] = useState(""), [toast, setToast] = useState<Toast>(null), [confirmDelete, setConfirmDelete] = useState<Transaction | null>(null);
+  const [confirmSettleDebt, setConfirmSettleDebt] = useState<Debt | null>(null);
   const [openCycle, setOpenCycle] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -290,19 +291,54 @@ export default function Home() {
     }
   }
 
-  async function removeDebt(id: string) {
-    const left = debts.find(d => d.id === id);
-    const remaining = left ? debtRemaining(left, txs) : 0;
-    if (remaining > 0 && txs.some(t => t.debt_id === id)) {
-      setToast({ kind: "error", text: "Không xóa được vì còn nợ và đã có giao dịch trả. Hãy trả hết trước." });
-      return;
-    }
-    const { error } = await supabase.from("debts").delete().eq("id", id);
+  function requestRemoveDebt(id: string) {
+    const target = debts.find(d => d.id === id);
+    if (!target) return;
+    if (debtRemaining(target, txs) > 0) setConfirmSettleDebt(target);
+    else void removeDebtOnly(target);
+  }
+
+  async function removeDebtOnly(target: Debt) {
+    const { error } = await supabase.from("debts").delete().eq("id", target.id);
     if (error) setToast({ kind: "error", text: error.message });
     else {
-      setDebts(p => p.filter(d => d.id !== id));
-      if (debtId === id) setDebtId("");
-      setToast({ kind: "info", text: "Đã xóa khoản nợ." });
+      setDebts(p => p.filter(d => d.id !== target.id));
+      if (debtId === target.id) setDebtId("");
+      setConfirmSettleDebt(null);
+      setToast({ kind: "info", text: `Đã xóa khoản nợ ${target.name}.` });
+    }
+  }
+
+  async function settleDebtFully() {
+    if (!uid || !confirmSettleDebt) return;
+    const target = confirmSettleDebt;
+    const remaining = debtRemaining(target, txs);
+    if (remaining > 0) {
+      const { data, error } = await supabase.from("transactions").insert({
+        user_id: uid,
+        occurred_on: toDateOnly(localDate()),
+        description: `Trả hết nợ ${target.name}`,
+        category: "Trả nợ",
+        type: "Chi",
+        amount: remaining,
+        note: "Ghi nhận khi xóa khoản nợ đã trả",
+        debt_id: target.id,
+      }).select("*").single();
+      if (error) { setToast({ kind: "error", text: error.message }); return; }
+      if (data) setTxs(p => [data as Transaction, ...p]);
+    }
+    const { error } = await supabase.from("debts").delete().eq("id", target.id);
+    if (error) setToast({ kind: "error", text: error.message });
+    else {
+      setDebts(p => p.filter(d => d.id !== target.id));
+      if (debtId === target.id) setDebtId("");
+      setConfirmSettleDebt(null);
+      setToast({
+        kind: "success",
+        text: remaining > 0
+          ? `Đã ghi trả nợ ${money(remaining)} cho ${target.name} và trừ vào tiền còn lại.`
+          : `Đã xóa khoản nợ ${target.name}.`,
+      });
     }
   }
 
@@ -344,12 +380,39 @@ export default function Home() {
       {tab === "dashboard" && <><header className="hero"><div><span className="eyebrow">Kỳ hiện tại</span><div className="cycle-range"><div><span>Bắt đầu</span><strong>{dmy(cycleStart)}</strong></div><i>→</i><div><span>Kết thúc</span><strong>{dmy(cycleEnd(cycleStart))}</strong></div></div></div><button className="primary hero-action" onClick={() => goTab("transactions")}><Plus size={16} strokeWidth={2.5} aria-hidden="true" /><span>Giao dịch</span></button></header><section className="dashboard-section"><div className="section-title"><div><span className="eyebrow">Tổng quan kỳ hiện tại</span><h2>Dòng tiền thực tế</h2></div><span>{toDateOnly(today)}</span></div><div className="metric-grid sheet-metrics"><Metric title="Thu nhập kỳ này" value={money(current?.income ?? 0)} tone="blue" /><Metric title="Chi sinh hoạt kỳ này" value={money(livingSpend)} /><Metric title="Đã trả nợ kỳ này" value={money(current?.debtPaid ?? 0)} /><Metric title="Tổng tiền ra kỳ này" value={money(totalOut)} tone="amber" /><Metric title="Tiền còn lại" value={money(current?.savings ?? 0)} tone={(current?.savings ?? 0) >= 0 ? "green" : "red"} /><Metric title="Nợ hiện tại" value={money(debt)} tone="amber" /></div></section><div className="finance-grid"><article className="panel budget-panel"><div className="panel-head"><div><span className="eyebrow">Ngân sách kỳ hiện tại</span><h2>Còn/Vượt budget kỳ</h2></div><span className="pill">{pct(livingSpend / (livingBudget || 1))}</span></div><div className="budget-big"><strong className={budgetRemaining < 0 ? "bad-text" : ""}>{money(budgetRemaining)}</strong><span>{budgetRemaining >= 0 ? "còn lại" : "vượt"}</span></div><div className="progress"><span style={{ width: `${Math.min(100, Math.max(0, livingSpend / (livingBudget || 1) * 100))}%` }} /></div><div className="stat-list"><StatLine label="Budget/ngày" value={money(settings.daily_budget)} /><StatLine label="Đã chi hôm nay" value={money(spentToday)} /><StatLine label="Còn hôm nay" value={money(remainingToday)} bad={remainingToday < 0} /><StatLine label="Budget sinh hoạt/kỳ" value={money(livingBudget)} /><StatLine label="Đã dùng budget kỳ" value={money(livingSpend)} /><StatLine label="Trọ / Phát sinh" value={`${shortMoney(current?.rent ?? 0)} / ${shortMoney(current?.incidental ?? 0)}`} /></div></article><IncomeChart cycles={incomeCycles} earned={earnedIncome} bonus={bonusIncome} carried={carriedSavings} /></div><section className="section-head"><h2>Tóm tắt kỳ lương</h2><button className="link-btn" onClick={() => goTab("cycles")}>Xem tất cả</button></section><CycleSummary cycles={cycles.slice(0, 6)} onOpen={openCycleDetails} /><section className="section-head"><h2>Giao dịch gần đây</h2><button className="link-btn" onClick={() => goTab("transactions")}>Xem tất cả</button></section><TxList items={txs.slice(0, 6)} debts={debts} onDelete={setConfirmDelete} canDelete={canDeleteTx} /></>}
       {tab === "transactions" && <><header className="page-header"><div><span className="eyebrow">Nguồn dữ liệu chính</span><h1>Giao dịch</h1><p>Nhập giao dịch thật, mọi báo cáo sẽ tự cập nhật.</p></div></header><form className="tx-card" onSubmit={addTx}><div className="segmented"><motion.span className={`segmented-pill ${type === "Chi" ? "expense" : "income"}`} animate={{ x: type === "Chi" ? 0 : "calc(100% + 8px)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} /><button type="button" className={type === "Chi" ? "active" : ""} onClick={() => setType("Chi")}>Chi</button><button type="button" className={type === "Thu" ? "active" : ""} onClick={() => setType("Thu")}>Thu</button></div><label>Ngày<input type="date" value={txDate} aria-invalid={txError.includes("ngày")} onChange={e => { setTxDate(e.target.value); if (txError) setTxError(""); }} /></label><label>Nội dung<input value={desc} aria-invalid={txError.includes("nội dung")} onChange={e => { setDesc(e.target.value); if (txError) setTxError(""); }} placeholder="Ví dụ: Ăn trưa" /></label><div className="form-grid"><CategorySelect value={category} options={categories} onChange={c => { setCategory(c); setType(expenseCategories.has(c) ? "Chi" : "Thu"); if (c !== "Trả nợ") setDebtId(""); if (txError) setTxError(""); }} /><label>Số tiền<input inputMode="numeric" value={amount} aria-invalid={txError.includes("Số tiền") || txError.includes("Số trả")} onChange={e => { setAmount(formatInputMoney(e.target.value)); if (txError) setTxError(""); }} placeholder="120.000" /></label></div>{category === "Trả nợ" && <div className="debt-pay-box"><DebtSelect value={debtId} options={payableOptions} onChange={id => { setDebtId(id); if (txError) setTxError(""); }} />{selectedDebt && <p className="setting-hint debt-pay-hint">Còn lại: <strong>{money(selectedDebtLeft)}</strong> / gốc {money(selectedDebt.principal)}</p>}{debts.length > 0 && activeDebts.length === 0 && <p className="setting-hint">Tất cả khoản nợ đã trả xong.</p>}</div>}<label>Ghi chú<input value={note} onChange={e => setNote(e.target.value)} placeholder="Không bắt buộc" /></label><AnimatePresence>{txError && <motion.div key={txError} className="form-error shake" role="alert" initial={reduceMotion ? false : { opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>{txError}</motion.div>}</AnimatePresence><button className="primary full" type="submit">Lưu giao dịch</button></form><TxList items={txs} debts={debts} onDelete={setConfirmDelete} canDelete={canDeleteTx} /></>}
       {tab === "cycles" && <><header className="page-header cycles-header"><div className="cycles-header-top"><div className="cycles-header-copy"><span className="eyebrow">Theo dõi chi tiêu</span><h1>Các kỳ lương</h1><p>Chọn một kỳ để xem thu, chi và số còn lại.</p></div><div className="cycles-header-icon" aria-hidden="true"><Clock3 size={18} strokeWidth={2.2} /></div></div><div className="cycle-rule" role="note"><span className="cycle-rule-caption">Quy tắc mỗi kỳ</span><div className="cycle-rule-track"><div className="cycle-rule-day"><small>Bắt đầu</small><strong>Ngày {salaryDay}</strong></div><span className="cycle-rule-arrow" aria-hidden="true"><i /></span><div className="cycle-rule-day"><small>Kết thúc</small><strong>{salaryDay === 1 ? "Cuối tháng" : `Ngày ${cycleEndDayLabel(salaryDay)}`}</strong></div></div></div></header><div className="cycle-list">{cycles.map(c => <CycleDetailCard key={c.start.toISOString()} cycle={c} items={cycleTxs(c.start)} open={openCycle === c.start.toISOString()} onToggle={() => setOpenCycle(openCycle === c.start.toISOString() ? "" : c.start.toISOString())} onViewAll={() => goTab("transactions")} />)}</div></>}
-      {tab === "settings" && <><header className="page-header"><div><span className="eyebrow">Cấu hình</span><h1>Thiết lập chi tiêu</h1><p>Các mốc dưới đây dùng để tính ngân sách. Số thực tế vẫn lấy từ giao dịch.</p></div></header><form className="settings-shell" onSubmit={save}><section className="setting-group"><div><h2>Kỳ chi tiêu</h2><p>Ngày bắt đầu quyết định chu kỳ (ví dụ 7/9 → kỳ chạy tới 6/10).</p></div><label>Ngày bắt đầu kỳ đầu tiên<input type="date" value={settings.plan_start_date} onChange={e => { const plan_start_date = e.target.value; setSettings({ ...settings, plan_start_date, salary_day: salaryDayFromPlanStart(plan_start_date) }); }} /></label><p className="setting-hint">Mỗi kỳ chạy từ ngày {salaryDay} đến {salaryDay === 1 ? "cuối tháng" : `ngày ${cycleEndDayLabel(salaryDay)} tháng sau`}.</p></section><section className="setting-group"><div><h2>Ngân sách sinh hoạt</h2><p>Ngân sách mỗi kỳ = hạn mức/ngày × 30 + tiền trọ + phát sinh.</p></div><Setting label="Hạn mức chi tiêu mỗi ngày" value={settings.daily_budget} set={v => setSettings({ ...settings, daily_budget: v })} /><Setting label="Tiền trọ mỗi kỳ" value={settings.rent_budget} set={v => setSettings({ ...settings, rent_budget: v })} /><Setting label="Dự phòng phát sinh mỗi kỳ" value={settings.incidental_budget} set={v => setSettings({ ...settings, incidental_budget: v })} /></section><section className="setting-group debt-setting"><div><h2>Nợ cần trả</h2><p>Thêm từng khoản nợ (ai / bao nhiêu). Tổng và số còn lại tự cập nhật khi bạn ghi giao dịch Trả nợ.</p></div><div className="debt-list">{activeDebts.length === 0 ? <p className="debt-empty">Chưa có khoản nợ nào.</p> : activeDebts.map(d => { const left = debtRemaining(d, txs); return <div key={d.id} className="debt-row"><div><strong>{d.name}</strong><small>Còn {money(left)} · gốc {money(d.principal)}</small></div><div className="debt-row-meta"><span>{shortMoney(left)}</span><button type="button" className="debt-del" aria-label={`Xóa ${d.name}`} onClick={() => removeDebt(d.id)}><Trash2 size={15} strokeWidth={2.2} /></button></div></div>; })}</div><div className="debt-preview"><span>Tổng nợ còn lại</span><strong>{money(debt)}</strong></div><div className="debt-add"><label>Nợ ai<input value={debtName} onChange={e => setDebtName(e.target.value)} placeholder="Ví dụ: Anh A" /></label><label>Số tiền<input inputMode="numeric" value={debtAmount} onChange={e => setDebtAmount(formatInputMoney(e.target.value))} placeholder="10.000.000" /></label><button type="button" className="primary" onClick={addDebt}>Thêm khoản nợ</button></div></section><section className="setting-group"><div><h2>Thông tin thêm</h2><p>Số dư và thưởng năm sẽ được cộng vào tổng tiền trên Dashboard.</p></div><Setting label="Số dư tiết kiệm đầu kỳ" value={settings.initial_savings} set={v => setSettings({ ...settings, initial_savings: v })} /><p className="setting-hint">Tiền bạn đã có trước khi bắt đầu theo dõi (không phải lương kỳ này).</p><Setting label="Thưởng Tết / thưởng năm" value={settings.t13_amount} set={v => setSettings({ ...settings, t13_amount: v, t13_date: null })} /><p className="setting-hint">Điền số tiền thưởng năm để cộng vào tổng thu trên Dashboard.</p></section><button className="primary full settings-save" type="submit">Lưu cấu hình</button></form></>}
+      {tab === "settings" && <><header className="page-header"><div><span className="eyebrow">Cấu hình</span><h1>Thiết lập chi tiêu</h1><p>Các mốc dưới đây dùng để tính ngân sách. Số thực tế vẫn lấy từ giao dịch.</p></div></header><form className="settings-shell" onSubmit={save}><section className="setting-group"><div><h2>Kỳ chi tiêu</h2><p>Ngày bắt đầu quyết định chu kỳ (ví dụ 7/9 → kỳ chạy tới 6/10).</p></div><label>Ngày bắt đầu kỳ đầu tiên<input type="date" value={settings.plan_start_date} onChange={e => { const plan_start_date = e.target.value; setSettings({ ...settings, plan_start_date, salary_day: salaryDayFromPlanStart(plan_start_date) }); }} /></label><p className="setting-hint">Mỗi kỳ chạy từ ngày {salaryDay} đến {salaryDay === 1 ? "cuối tháng" : `ngày ${cycleEndDayLabel(salaryDay)} tháng sau`}.</p></section><section className="setting-group"><div><h2>Ngân sách sinh hoạt</h2><p>Ngân sách mỗi kỳ = hạn mức/ngày × 30 + tiền trọ + phát sinh.</p></div><Setting label="Hạn mức chi tiêu mỗi ngày" value={settings.daily_budget} set={v => setSettings({ ...settings, daily_budget: v })} /><Setting label="Tiền trọ mỗi kỳ" value={settings.rent_budget} set={v => setSettings({ ...settings, rent_budget: v })} /><Setting label="Dự phòng phát sinh mỗi kỳ" value={settings.incidental_budget} set={v => setSettings({ ...settings, incidental_budget: v })} /></section><section className="setting-group debt-setting"><div><h2>Nợ cần trả</h2><p>Thêm từng khoản nợ (ai / bao nhiêu). Trả qua Giao dịch → Trả nợ, hoặc bấm xóa để ghi nhận đã trả hết và trừ tiền còn lại.</p></div><div className="debt-list">{activeDebts.length === 0 ? <p className="debt-empty">Chưa có khoản nợ nào.</p> : activeDebts.map(d => { const left = debtRemaining(d, txs); return <div key={d.id} className="debt-row"><div><strong>{d.name}</strong><small>Còn {money(left)} · gốc {money(d.principal)}</small></div><div className="debt-row-meta"><span>{shortMoney(left)}</span><button type="button" className="debt-del" aria-label={`Xóa ${d.name}`} onClick={() => requestRemoveDebt(d.id)}><Trash2 size={15} strokeWidth={2.2} /></button></div></div>; })}</div><div className="debt-preview"><span>Tổng nợ còn lại</span><strong>{money(debt)}</strong></div><div className="debt-add"><label>Nợ ai<input value={debtName} onChange={e => setDebtName(e.target.value)} placeholder="Ví dụ: Anh A" /></label><label>Số tiền<input inputMode="numeric" value={debtAmount} onChange={e => setDebtAmount(formatInputMoney(e.target.value))} placeholder="10.000.000" /></label><button type="button" className="primary" onClick={addDebt}>Thêm khoản nợ</button></div></section><section className="setting-group"><div><h2>Thông tin thêm</h2><p>Số dư và thưởng năm sẽ được cộng vào tổng tiền trên Dashboard.</p></div><Setting label="Số dư tiết kiệm đầu kỳ" value={settings.initial_savings} set={v => setSettings({ ...settings, initial_savings: v })} /><p className="setting-hint">Tiền bạn đã có trước khi bắt đầu theo dõi (không phải lương kỳ này).</p><Setting label="Thưởng Tết / thưởng năm" value={settings.t13_amount} set={v => setSettings({ ...settings, t13_amount: v, t13_date: null })} /><p className="setting-hint">Điền số tiền thưởng năm để cộng vào tổng thu trên Dashboard.</p></section><button className="primary full settings-save" type="submit">Lưu cấu hình</button></form></>}
         </motion.div>
       </AnimatePresence>
     </section>
     <LayoutGroup id="bottom-nav"><nav className="bottom-nav mobile-shell-nav">{nav.map(([k, l]) => <button key={k} className={tab === k ? "nav-active" : ""} onClick={() => goTab(k)}>{tab === k && <motion.span layoutId="bottom-nav-pill" className="nav-pill" transition={{ type: "spring", stiffness: 420, damping: 34 }} />}<NavIcon name={k} />{l}</button>)}</nav></LayoutGroup>
     <AnimatePresence>{confirmDelete && <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={() => setConfirmDelete(null)}><motion.section className="modal" role="dialog" aria-modal="true" initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2, ease: easeOut }} onClick={e => e.stopPropagation()}><h2>Xóa giao dịch?</h2><p>{confirmDelete.description} · {money(confirmDelete.amount)}</p><div><button className="ghost" onClick={() => setConfirmDelete(null)}>Hủy</button><button className="danger" onClick={delTx}>Xóa</button></div></motion.section></motion.div>}</AnimatePresence>
+    <AnimatePresence>
+      {confirmSettleDebt && (
+        <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={() => setConfirmSettleDebt(null)}>
+          <motion.section
+            className="modal settle-debt-modal"
+            role="dialog"
+            aria-modal="true"
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.2, ease: easeOut }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2>Đã trả hết nợ {confirmSettleDebt.name}?</h2>
+            <p>
+              Còn <strong>{money(debtRemaining(confirmSettleDebt, txs))}</strong>.
+              Chọn <strong>Đã trả hết</strong> để ghi giao dịch Trả nợ và trừ vào tiền còn lại.
+            </p>
+            <div className="modal-actions settle-debt-actions">
+              <button type="button" className="primary" onClick={() => void settleDebtFully()}>Đã trả hết (trừ tiền)</button>
+              <button type="button" className="ghost" onClick={() => void removeDebtOnly(confirmSettleDebt)}>Chỉ xóa (không trừ)</button>
+              <button type="button" className="link-btn" onClick={() => setConfirmSettleDebt(null)}>Hủy</button>
+            </div>
+          </motion.section>
+        </motion.div>
+      )}
+    </AnimatePresence>
     <AnimatePresence>
       {showOnboarding && (
         <motion.div className="modal-backdrop onboarding-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>

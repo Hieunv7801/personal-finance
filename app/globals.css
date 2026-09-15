@@ -314,6 +314,9 @@ label:has(>input[type="date"]){overflow:hidden;min-width:0}
 .onboarding-cta:hover{background:linear-gradient(135deg,#1e293b,#0f766e)}
 .onboarding-skip{border:0;background:transparent;color:#64748b;font-weight:850;padding:10px;border-radius:12px}
 .onboarding-skip:hover{color:#0f172a;background:rgba(15,23,42,.04)}
+.settle-debt-modal .settle-debt-actions{display:grid!important;grid-template-columns:1fr!important;gap:8px!important}
+.settle-debt-modal .settle-debt-actions .primary,.settle-debt-modal .settle-debt-actions .ghost{width:100%}
+.settle-debt-modal .settle-debt-actions .link-btn{justify-self:center;padding:6px 12px}
 .ghost{background:#f1f5f9;color:#334155}.danger{background:#dc2626;color:white}
 .bottom-nav,.mobile-shell-nav,.mobile-account-bar{display:none}
 @media(max-width:1180px){
