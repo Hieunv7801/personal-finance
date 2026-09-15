@@ -139,6 +139,12 @@ label:has(>input[type="date"]){overflow:hidden;min-width:0}
 .income-breakdown .tone-carry{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
 .income-breakdown .tone-carry i{background:#dbeafe;color:#2563eb}
 .income-breakdown .tone-carry strong{color:#1d4ed8}
+.income-breakdown .tone-living{background:#f8fafc;border-color:#e2e8f0;color:#475569}
+.income-breakdown .tone-living i{background:#e2e8f0;color:#334155}
+.income-breakdown .tone-living strong{color:#0f172a}
+.income-breakdown .tone-debt{background:#fffbeb;border-color:#fde68a;color:#b45309}
+.income-breakdown .tone-debt i{background:#fef3c7;color:#d97706}
+.income-breakdown .tone-debt strong{color:#b45309}
 .bar-chart-wrap{display:grid;gap:8px}
 .bar-chart-legend{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .bar-chart-label{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#64748b}

@@ -172,10 +172,15 @@ export default function Home() {
   const bonusIncome = settings?.t13_amount ?? 0;
   const carriedSavings = settings?.initial_savings ?? 0;
   const earnedIncome = incomeCycles.reduce((sum, c) => sum + c.income, 0);
-  const cycleTxs = (start: Date) => txs.filter(t => {
-    const d = parseDateOnly(t.occurred_on);
-    return d >= start && d < new Date(start.getFullYear(), start.getMonth() + 1, start.getDate());
-  });
+  const cycleTxs = (start: Date) => {
+    const planStart = settings ? parseDateOnly(settings.plan_start_date) : start;
+    return txs.filter(t => {
+      const d = parseDateOnly(t.occurred_on);
+      if (d >= start && d < new Date(start.getFullYear(), start.getMonth() + 1, start.getDate())) return true;
+      if (start.getTime() === planStart.getTime() && d < planStart) return true;
+      return false;
+    });
+  };
   const openCycleDetails = (key: string) => {
     setOpenCycle(key);
     goTab("cycles");
@@ -421,7 +426,9 @@ function BudgetCard({ title, percent, main, sub, left, right, goal = false }: { 
 function StatLine({ label, value, bad = false }: { label: string; value: string; bad?: boolean }) { return <div className="stat-line"><span>{label}</span><strong className={bad ? "bad-text" : ""}>{value}</strong></div>; }
 function IncomeChart({ cycles, earned, bonus, carried }: { cycles: ReturnType<typeof buildCycles>; earned: number; bonus: number; carried: number }) {
   const visible = cycles.slice(0, 12);
-  const totalOut = visible.reduce((sum, c) => sum + (c.hasData ? c.totalOut : 0), 0);
+  const livingOut = visible.reduce((sum, c) => sum + (c.hasData ? c.livingSpend : 0), 0);
+  const debtOut = visible.reduce((sum, c) => sum + (c.hasData ? c.debtPaid : 0), 0);
+  const totalOut = livingOut + debtOut;
   const remaining = earned + bonus + carried - totalOut;
   const maxIncome = Math.max(1, ...visible.map(c => c.income));
   return (
@@ -451,8 +458,18 @@ function IncomeChart({ cycles, earned, bonus, carried }: { cycles: ReturnType<ty
         </div>
         <div className="tone-out">
           <i aria-hidden="true"><ArrowUpFromLine size={15} strokeWidth={2.3} /></i>
-          <span>Chi</span>
+          <span>Tổng chi</span>
           <strong>{money(totalOut)}</strong>
+        </div>
+        <div className="span-all tone-living">
+          <i aria-hidden="true"><House size={15} strokeWidth={2.3} /></i>
+          <span>Chi sinh hoạt</span>
+          <strong>{money(livingOut)}</strong>
+        </div>
+        <div className="span-all tone-debt">
+          <i aria-hidden="true"><Landmark size={15} strokeWidth={2.3} /></i>
+          <span>Trả nợ</span>
+          <strong>{money(debtOut)}</strong>
         </div>
         {bonus > 0 && (
           <div className="span-all tone-bonus">

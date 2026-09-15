@@ -25,7 +25,14 @@ export function buildCycles(txs: Transaction[], s: Settings, through: Date, coun
   const last = cycleStartFor(through, salaryDay, first);
   let cumulative = s.initial_savings;
   return Array.from({ length: count }, (_, i) => {
-    const start = addMonths(first, i), end = cycleEnd(start), ct = txs.filter(t => inCycle(t.occurred_on, start)), hasData = ct.length > 0;
+    const start = addMonths(first, i), end = cycleEnd(start);
+    const ct = txs.filter(t => {
+      if (inCycle(t.occurred_on, start)) return true;
+      // Giao dịch trước ngày bắt đầu kỳ gắn vào kỳ đầu để vẫn trừ vào dòng tiền / trả nợ
+      if (i === 0 && parseDateOnly(t.occurred_on) < first) return true;
+      return false;
+    });
+    const hasData = ct.length > 0;
     const livingBudget = s.daily_budget * 30 + s.rent_budget + s.incidental_budget;
     if (start > last && !hasData) return { start, end, income: 0, dailySpend: 0, rent: 0, incidental: 0, livingSpend: 0, livingBudget, budgetRemaining: 0, debtPaid: 0, totalOut: 0, savings: 0, cumulative, hasData: false };
     const income = ct.filter(t => t.type === "Thu").reduce((a, t) => a + t.amount, 0);
